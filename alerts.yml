@@ -1,0 +1,118 @@
+# =============================================================================
+# Prometheus Alert Rules für Database Backup Manager
+# =============================================================================
+# Füge diese Rules zu deiner Prometheus-Konfiguration hinzu
+# =============================================================================
+
+groups:
+  - name: db-backup-alerts
+    rules:
+      # =========================================================================
+      # CRITICAL ALERTS
+      # =========================================================================
+      
+      # Backup Manager ist down
+      - alert: DbBackupManagerDown
+        expr: db_backup_manager_up == 0 or absent(db_backup_manager_up)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database Backup Manager is down"
+          description: "The database backup manager has been down for more than 5 minutes."
+      
+      # Letztes Backup fehlgeschlagen
+      - alert: DbBackupFailed
+        expr: db_backup_last_success == 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database backup failed for {{ $labels.container }}"
+          description: "The last backup for {{ $labels.container }} ({{ $labels.database }}) failed."
+      
+      # Backup überfällig (mehr als 25 Stunden)
+      - alert: DbBackupOverdue
+        expr: db_backup_seconds_since_last > 90000 and db_backup_last_success >= 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database backup overdue for {{ $labels.container }}"
+          description: "No successful backup for {{ $labels.container }} ({{ $labels.database }}) in the last 25 hours."
+      
+      # =========================================================================
+      # WARNING ALERTS
+      # =========================================================================
+      
+      # Backup überfällig (mehr als 12 Stunden)
+      - alert: DbBackupDelayed
+        expr: db_backup_seconds_since_last > 43200 and db_backup_seconds_since_last <= 90000 and db_backup_last_success >= 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database backup delayed for {{ $labels.container }}"
+          description: "No successful backup for {{ $labels.container }} ({{ $labels.database }}) in the last 12 hours."
+      
+      # Backup dauert zu lange (mehr als 30 Minuten)
+      - alert: DbBackupSlow
+        expr: db_backup_last_duration_seconds > 1800
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database backup is slow for {{ $labels.container }}"
+          description: "Last backup for {{ $labels.container }} took {{ $value | humanizeDuration }}."
+      
+      # Backup-Größe ungewöhnlich (mehr als 10GB)
+      - alert: DbBackupLarge
+        expr: db_backup_last_size_bytes > 10737418240
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Large backup for {{ $labels.container }}"
+          description: "Backup for {{ $labels.container }} is {{ $value | humanize1024 }}B."
+      
+      # Viele Fehler
+      - alert: DbBackupHighFailureRate
+        expr: db_backup_failures_total > 5
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High backup failure count for {{ $labels.container }}"
+          description: "{{ $labels.container }} has {{ $value }} total backup failures."
+      
+      # =========================================================================
+      # INFO ALERTS
+      # =========================================================================
+      
+      # Noch nie ein Backup gelaufen
+      - alert: DbBackupNeverRun
+        expr: db_backup_last_success == -1
+        for: 1h
+        labels:
+          severity: info
+        annotations:
+          summary: "Backup never run for {{ $labels.container }}"
+          description: "No backup has been executed yet for {{ $labels.container }} ({{ $labels.database }}). Waiting for scheduled time."
+
+# =============================================================================
+# Recording Rules (Optional - für Performance)
+# =============================================================================
+
+  - name: db-backup-recording
+    rules:
+      # Gesamtzahl erfolgreicher Backups
+      - record: db_backup:total_success:sum
+        expr: sum(db_backup_total) - sum(db_backup_failures_total)
+      
+      # Durchschnittliche Backup-Größe
+      - record: db_backup:size_bytes:avg
+        expr: avg(db_backup_last_size_bytes)
+      
+      # Durchschnittliche Backup-Dauer
+      - record: db_backup:duration_seconds:avg
+        expr: avg(db_backup_last_duration_seconds)

@@ -1,0 +1,141 @@
+# =============================================================================
+# Database Backup Manager - Komodo Stack
+# =============================================================================
+# Optimiert für Komodo mit allen relevanten Labels und Konfigurationen
+# 
+# Features:
+#   - Prometheus Metrics auf Port 9090
+#   - Health/Readiness Endpoints
+#   - Label-basierte Backup-Konfiguration
+#   - Ressourcenlimits für stabilen Betrieb
+# =============================================================================
+
+services:
+  # =========================================================================
+  # DATABASE BACKUP MANAGER
+  # =========================================================================
+  db-backup:
+    image: db-backup-manager:latest
+    container_name: db-backup
+    hostname: db-backup
+    restart: unless-stopped
+    
+    # Komodo Labels
+    labels:
+      # Komodo Metadata
+      - "komodo.project=infrastructure"
+      - "komodo.service=db-backup"
+      - "komodo.description=Automatic database backup manager"
+      
+      # Homepage / Dashboard Integration (optional)
+      - "homepage.group=Infrastructure"
+      - "homepage.name=DB Backup"
+      - "homepage.icon=database"
+      - "homepage.description=Database Backup Manager"
+      - "homepage.widget.type=customapi"
+      - "homepage.widget.url=http://db-backup:9090/status"
+    
+    environment:
+      # Backup-Verzeichnis im Container
+      - BACKUP_DIR=/backups
+      # Wie oft nach neuen Containern/Schedules checken (Sekunden)
+      - CHECK_INTERVAL=60
+      # Port für Prometheus Metrics
+      - METRICS_PORT=9090
+      # Label-Prefix (falls du einen anderen nutzen willst)
+      - LABEL_PREFIX=db-backup
+      # Zeitzone
+      - TZ=Europe/Berlin
+    
+    volumes:
+      # Docker Socket für Label-Reading (read-only!)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Backup Volume - hier landen alle Backups
+      - db-backups:/backups
+    
+    # Port für Prometheus/Grafana
+    ports:
+      - "9099:9090"  # Metrics auf 9099 um Konflikte zu vermeiden
+    
+    # Ressourcenlimits - anpassen nach Bedarf
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    
+    # Health Check
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    networks:
+      - default
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  db-backups:
+    name: db-backups
+    labels:
+      - "komodo.volume=db-backups"
+      - "komodo.description=Database backup storage"
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  default:
+    name: db-backup-network
+    # Wenn du ein bestehendes Netzwerk nutzen willst:
+    # external: true
+    # name: your-network-name
+
+# =============================================================================
+# PROMETHEUS SCRAPE CONFIG (für deine prometheus.yml)
+# =============================================================================
+# 
+# scrape_configs:
+#   - job_name: 'db-backup'
+#     static_configs:
+#       - targets: ['db-backup:9090']
+#     metrics_path: /metrics
+#     scrape_interval: 30s
+#
+# =============================================================================
+# GRAFANA DASHBOARD QUERIES
+# =============================================================================
+#
+# Last Backup Status (pro Container):
+#   db_backup_last_success{container="$container"}
+#
+# Time since last backup:
+#   db_backup_seconds_since_last{container="$container"}
+#
+# Backup Size:
+#   db_backup_last_size_bytes{container="$container"}
+#
+# Backup Duration:
+#   db_backup_last_duration_seconds{container="$container"}
+#
+# Failed Backups Alert:
+#   db_backup_last_success == 0
+#
+# Backup Overdue Alert (>25h since last backup):
+#   db_backup_seconds_since_last > 90000
+#
+# =============================================================================
