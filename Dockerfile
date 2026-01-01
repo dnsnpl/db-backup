@@ -42,12 +42,12 @@ RUN curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --dearmor
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Install Python dependencies
+# Copy and install Python dependencies
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy application
-COPY scripts/ /app/
+# Copy application script
+COPY backup_manager.py /app/
 
 # Create backup directory with proper permissions
 RUN mkdir -p /backups && chmod 755 /backups

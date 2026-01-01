@@ -263,10 +263,9 @@ docker restart redis
 db-backup-container/
 ├── Dockerfile
 ├── docker-compose.yml        # Komodo-optimiert
+├── backup_manager.py         # Hauptskript
 ├── requirements.txt
 ├── README.md
-├── scripts/
-│   └── backup_manager.py     # Hauptskript
 ├── examples/
 │   ├── docker-compose.full-example.yml
 │   ├── docker-compose.minimal.yml
